@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>XSS Demo - Storage Behavior</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin-top: 10px; 
+        }
+        th, td { 
+            border: 1px solid #333; 
+            padding: 8px; 
+        }
+        code { 
+            background-color: #f4f4f4; 
+            padding: 2px 4px; 
+            border-radius: 3px; 
+            font-family: monospace; 
+        }
+        .section { 
+            margin-bottom: 30px; 
+        }
+        #dom-output {
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            margin-top: 10px; 
+            background: #f9f9f9;
+            min-height: 50px;
+        }
+        .warning { 
+            color: red; 
+            font-weight: bold; 
+        }
+    </style>
+
+    <!-- Auto-run DOM XSS on load -->
+    <script>
+        // Auto-execute DOM XSS when page loads
+        document.addEventListener("DOMContentLoaded", function () {
+            const xssType = "{{ xss_type }}";
+            const payloadInput = document.getElementById("payload");
+            const outputDiv = document.getElementById("dom-output");
+
+            // Only run if we're in DOM mode and there's a payload
+            if (xssType === "dom" && payloadInput && outputDiv) {
+                const payload = payloadInput.value.trim();
+                if (payload) {
+                    outputDiv.innerHTML = payload;  // 💥 Executes immediately
+                }
+            }
+        });
+    </script>
+</head>
+<body>
+
+<h1>🔐 XSS prevention in django templates</h1>
+
+
+<form method="post">
+    {% csrf_token %}
+    <label for="xss_type">Select Type:</label>
+    <select name="xss_type" id="xss_type">
+        <option value="persistent" {% if xss_type == "persistent" %}selected{% endif %}>Persistent (Stored) XSS</option>
+        <option value="reflected" {% if xss_type == "reflected" %}selected{% endif %}>Reflected XSS</option>
+        <option value="dom" {% if xss_type == "dom" %}selected{% endif %}>DOM-based XSS</option>
+        <option value="safe" {% if xss_type == "safe" %}selected{% endif %}>XSS prevented(safe)</option>
+    </select>
+
+    <input type="text" name="payload" id="payload"
+           value="{{ payload|default:'' }}"
+           placeholder="Try: <img src=x onerror=alert('DOM XSS')>"
+           required>
+    <button type="submit">Submit</button>
+</form>
+<hr>
+
+<!-- ✅ Persistent XSS: Shows stored comments from DB -->
+{% if xss_type == "persistent" %}
+<div class="section">
+    <h2>📦 Persistent XSS: Stored Comments</h2>
+    <p><strong>Your input:</strong> <code>{{ payload }}</code> was saved to the database.</p>
+
+    <!-- Clear Button -->
+    <form method="post" style="margin:10px 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear">
+        <button type="submit" style="background:red; color:white; border:none; padding:6px 12px; cursor:pointer;">
+            🗑️ Delete All Comments
+        </button>
+    </form>
+
+    <!-- Stored Comments Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>Comment (May Execute)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for comment in output %}
+                <tr>
+                    <td style="padding:10px; font-family:monospace; background:#f0f0f0;">
+                        {{ comment.text|safe }}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td style="text-align:center; color:#888; padding:20px;">
+                        No comments stored yet.
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p style="margin-top:10px; font-style:italic; color:#555;">
+        <strong>Note:</strong> These comments are stored on the server and will appear for all users.
+    </p>
+</div>
+{% endif %}
+
+<!-- 🔁 Reflected XSS: One-time execution -->
+{% if xss_type == "reflected" %}
+<div class="section">
+    <h2>🔁 Reflected XSS: NOT Saved</h2>
+    <div style="border:1px solid #ccc; padding:10px;">
+        {{ result|safe }}
+    </div>
+    <p><strong>❌ This input is not saved.</strong> It disappears on refresh.</p>
+</div>
+{% endif %}
+
+<!-- ✅ Safe Output: Escaped -->
+{% if xss_type == "safe" %}
+<div class="section">
+    <h2>✅ Safe Output: NOT saved</h2>
+    <div style="border:1px solid #ccc; padding:10px;">
+        {{ result }}
+    </div>
+    <p><strong>❌ Not saved.</strong> Scripts shown as text.</p>
+</div>
+{% endif %}
+
+<!-- 🌐 DOM-based XSS: Auto-executed on load -->
+{% if xss_type == "dom" %}
+<div class="section">
+    <h2>🌐 DOM-based XSS: Auto-Executed</h2>
+    <p><strong>Status:</strong> Running payload directly in the browser.</p>
+
+    <!-- Hidden input (still needed for JS to read value) -->
+    <input type="text" id="payload" value="{{ payload|default:'' }}"
+           style="width:100%; padding:8px; margin:10px 0;"
+           readonly>
+
+    <!-- Output: injected automatically by JS -->
+    <div id="dom-output"></div>
+
+    <p><strong>❌ Not saved.</strong> Runs only in your browser — no server contact.</p>
+    
+</div>
+{% endif %}
+
+</body>
+</html>
